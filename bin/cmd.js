@@ -160,6 +160,7 @@ var playerName = argv.airplay ? 'Airplay'
                   : null
 
 var command = argv._[0]
+var numTorrents = 0;
 
 if (['info', 'create', 'download', 'add', 'seed'].indexOf(command) !== -1 && argv._.length === 1) {
   runHelp()
@@ -183,8 +184,10 @@ if (['info', 'create', 'download', 'add', 'seed'].indexOf(command) !== -1 && arg
   }
 } else if (command === 'download' || command === 'add') {
   let torrentIds = argv._.slice(1)
+  numTorrents = torrentIds.length
   if (torrentIds.length > 1) handleMultipleInputs(torrentIds)
   torrentIds.forEach(function (torrentId) {
+    console.log('downloading ' + torrentId)
     runDownload(torrentId)
   })
 } else if (command === 'downloadmeta') {
@@ -379,6 +382,7 @@ function runDownload (torrentId) {
   })
 
   torrent.on('done', function () {
+    numTorrents -= 1
     if (!argv.quiet) {
       var numActiveWires = torrent.wires.reduce(function (num, wire) {
         return num + (wire.downloaded > 0)
@@ -396,6 +400,7 @@ function runDownload (torrentId) {
   })
 
   // Start http server
+  if(server) return;
   server = torrent.createServer()
 
   function initServer () {
@@ -417,6 +422,15 @@ function runDownload (torrentId) {
   })
 
   function onReady () {
+
+    torrent.deselect(torrent.deselect(0, torrent.pieces.length - 1, false))
+    for (let i = 0; i < torrent.files.length; i++) {
+      if (torrent.files[i].name.search('128kb') >= 0 && torrent.files[i].name.search('mp3') >= 0) {
+        torrent.files[i].select()
+        console.log('selecting file ' + torrent.files[i].name)
+      }
+    }
+
     if (typeof argv.select === 'boolean') {
       clivas.line('Select a file to download:')
       torrent.files.forEach(function (file, i) {
@@ -728,7 +742,7 @@ function torrentDone () {
   if (argv['on-done']) {
     cp.exec(argv['on-done']).unref()
   }
-  if (!playerName && !serving && argv.out && !argv['keep-seeding']) {
+  if (!playerName && !serving && argv.out && !argv['keep-seeding'] && !numTorrents>0) {
     gracefulExit()
   }
 }
